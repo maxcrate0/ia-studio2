@@ -33,16 +33,6 @@ export interface ChatSession {
 
 // This is a global declaration for the aistudio object for TypeScript
 
-// FIX: To resolve the redeclaration error for 'aistudio', the `AIStudio` interface is no longer exported from this file.
-// It is now a local interface used only for the global declaration, which avoids a naming conflict with the
-// identical interface exported from the root `types.ts` file.
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    aistudio: AIStudio;
-  }
-}
+// FIX: To resolve the redeclaration error for 'aistudio', the AIStudio interface and global declaration
+// have been removed from this file. The project now relies on the single source of truth
+// in the root `types.ts` file.

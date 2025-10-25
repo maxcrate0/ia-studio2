@@ -41,11 +41,9 @@ export interface AIStudio {
   openSelectKey: () => Promise<void>;
 }
 
-// FIX: All declarations of 'aistudio' must have identical modifiers. This was caused by a duplicate global declaration in `src/types.ts`. Commenting this out to resolve the conflict.
-/*
+// FIX: Centralizing the global declaration in this file to resolve conflicts with a duplicate in src/types.ts.
 declare global {
   interface Window {
     aistudio: AIStudio;
   }
 }
-*/
