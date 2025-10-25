@@ -2,9 +2,17 @@ import { GoogleGenAI, Type, GenerateContentResponse, Modality } from "@google/ge
 import { Task, DispatchResponse, Feature } from '../types';
 import { fileToBase64, decode, decodeAudioData } from '../utils/helpers';
 
-// FIX: Use process.env.API_KEY as per guidelines. The API key is assumed to be available in the environment.
+let geminiApiKey: string | null = null;
+
+export const setGeminiApiKey = (key: string) => {
+  geminiApiKey = key;
+};
+
 const getAiClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  if (!geminiApiKey) {
+    throw new Error("A chave de API do Gemini não foi definida.");
+  }
+  return new GoogleGenAI({ apiKey: geminiApiKey });
 };
 
 const DISPATCHER_MODEL = 'gemini-2.5-pro';
@@ -148,8 +156,7 @@ export const executeTask = async (task: Task, context: { previousResult?: any; i
         const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
         if (!downloadLink) throw new Error("Video generation failed to produce a download link.");
         
-        // FIX: Use process.env.API_KEY for fetching the video.
-        const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+        const videoResponse = await fetch(`${downloadLink}&key=${geminiApiKey}`);
         const videoBlob = await videoResponse.blob();
         const videoUrl = URL.createObjectURL(videoBlob);
         

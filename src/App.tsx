@@ -3,10 +3,10 @@ import { ResultItem, Task, Feature, ChatSession } from './types';
 import PromptInput from './components/PromptInput';
 import ResultDisplay from './components/ResultDisplay';
 import LoadingIndicator from './components/LoadingIndicator';
-import ApiKeySelector from './components/ApiKeySelector';
+import ApiKeyInputModal from './components/ApiKeyInputModal';
 import ChatHistory from './components/ChatHistory';
 import UserPromptDisplay from './components/UserPromptDisplay';
-import { dispatchPrompt, executeTask, improvePrompt, generateChatTitle } from './services/geminiService';
+import { dispatchPrompt, executeTask, improvePrompt, generateChatTitle, setGeminiApiKey } from './services/geminiService';
 import { Bot } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -18,44 +18,16 @@ const App: React.FC = () => {
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [apiKey, setApiKey] = useState<string | null>(null);
   
-  const [needsApiKey, setNeedsApiKey] = useState<boolean>(false);
-  const [apiKeyReady, setApiKeyReady] = useState<boolean>(false);
-  const [isCheckingApiKey, setIsCheckingApiKey] = useState<boolean>(true);
-
   const resultsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // This effect runs once on mount to check for an existing API key.
-    // It polls for window.aistudio because it might be injected after the app loads.
-    const checkApiKey = () => {
-      let attempts = 0;
-      const maxAttempts = 15; // Poll for 3 seconds
-      const interval = 200;
-
-      const pollForAistudio = setInterval(async () => {
-        attempts++;
-        if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
-          clearInterval(pollForAistudio);
-          try {
-            const hasKey = await window.aistudio.hasSelectedApiKey();
-            setApiKeyReady(hasKey);
-          } catch (e) {
-            console.error("Error calling hasSelectedApiKey:", e);
-            setApiKeyReady(false);
-          } finally {
-            setIsCheckingApiKey(false);
-          }
-        } else if (attempts >= maxAttempts) {
-          clearInterval(pollForAistudio);
-          console.warn("window.aistudio was not found after timeout.");
-          setApiKeyReady(false);
-          setIsCheckingApiKey(false);
-        }
-      }, interval);
-    };
-
-    checkApiKey();
+    const storedApiKey = localStorage.getItem('geminiApiKey');
+    if (storedApiKey) {
+      setApiKey(storedApiKey);
+      setGeminiApiKey(storedApiKey);
+    }
   }, []);
 
   useEffect(() => {
@@ -121,11 +93,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleApiKeySelected = () => {
-    setApiKeyReady(true);
-    setNeedsApiKey(false);
-    // Automatically re-submit after key selection
-    handleSubmit();
+  const handleKeySubmit = (key: string) => {
+    const trimmedKey = key.trim();
+    if (trimmedKey) {
+      setApiKey(trimmedKey);
+      setGeminiApiKey(trimmedKey);
+      localStorage.setItem('geminiApiKey', trimmedKey);
+    }
   };
   
   const handleImprovePrompt = async () => {
@@ -136,7 +110,6 @@ const App: React.FC = () => {
       setPrompt(improved);
     } catch (e) {
       console.error("Failed to improve prompt", e);
-      // Optionally show an error to the user
     } finally {
       setIsImproving(false);
     }
@@ -155,18 +128,14 @@ const App: React.FC = () => {
   };
 
   const handleSubmit = useCallback(async () => {
-    if (!apiKeyReady) {
-      // Before showing the modal, verify the function to open it exists.
-      if (!window.aistudio || typeof window.aistudio.openSelectKey !== 'function') {
-        alert("A função para selecionar a chave de API não está disponível. Por favor, recarregue a página.");
-        return;
-      }
-      setNeedsApiKey(true);
-      return;
-    }
-
     const trimmedPrompt = prompt.trim();
     if ((!trimmedPrompt && !selectedFile) || isLoading) return;
+
+    if (!apiKey) {
+      // This should ideally not happen as the UI is blocked, but as a safeguard.
+      alert("A chave de API é necessária.");
+      return;
+    }
 
     setIsLoading(true);
     setLoadingMessage('Analisando seu pedido...');
@@ -196,7 +165,6 @@ const App: React.FC = () => {
         userImage: userImageBase64,
     });
     
-    // Auto-generate title for the first message
     const currentSession = sessions.find(s => s.id === currentId);
     if (currentSession && currentSession.conversation.length === 1 && trimmedPrompt) {
         generateChatTitle(trimmedPrompt).then(title => {
@@ -234,11 +202,12 @@ const App: React.FC = () => {
     } catch (e: any) {
       console.error(e);
       let errorMessage = `Ocorreu um erro: ${e.message || 'Tente novamente.'}`;
-      const isApiKeyError = e.message?.includes("Requested entity was not found.") || e.message?.includes("API Key must be set");
+      const isApiKeyError = e.message?.includes("API key not valid") || e.message?.includes("API_KEY");
 
       if (isApiKeyError) {
-        setApiKeyReady(false);
-        errorMessage = "Sua chave de API parece ser inválida ou não foi definida. Por favor, selecione uma chave válida e tente novamente.";
+        localStorage.removeItem('geminiApiKey');
+        setApiKey(null);
+        errorMessage = "Sua chave de API é inválida ou expirou. Por favor, insira uma nova chave válida.";
       }
       
       setError(errorMessage);
@@ -248,7 +217,7 @@ const App: React.FC = () => {
       setPrompt('');
       setSelectedFile(null);
     }
-  }, [prompt, selectedFile, isLoading, apiKeyReady, currentSessionId, sessions]);
+  }, [prompt, selectedFile, isLoading, apiKey, currentSessionId, sessions]);
 
   const getLoadingMessageForTask = (task: Task): string => {
     switch (task.feature) {
@@ -262,11 +231,14 @@ const App: React.FC = () => {
     }
   };
 
+  if (!apiKey) {
+    return <ApiKeyInputModal onKeySubmit={handleKeySubmit} />;
+  }
+
   const currentConversation = sessions.find(s => s.id === currentSessionId)?.conversation || [];
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
-      {needsApiKey && <ApiKeySelector onKeySelected={handleApiKeySelected} />}
       <ChatHistory 
         sessions={sessions}
         currentSessionId={currentSessionId}
@@ -285,11 +257,6 @@ const App: React.FC = () => {
                   <p className="text-gray-400 max-w-md">
                       Seu assistente de IA unificado. De imagens e vídeos a pesquisas e bate-papo, tudo em um só lugar. Como posso ajudar hoje?
                   </p>
-                  {!isCheckingApiKey && !apiKeyReady && (
-                    <div className="mt-4 bg-yellow-500/10 text-yellow-300 p-3 rounded-lg text-sm max-w-md">
-                      Nenhuma chave de API encontrada. Você será solicitado a selecionar uma ao enviar seu primeiro prompt.
-                    </div>
-                  )}
               </div>
           )}
           <div className="max-w-4xl mx-auto space-y-4">
@@ -309,7 +276,7 @@ const App: React.FC = () => {
             prompt={prompt}
             onPromptChange={setPrompt}
             onSubmit={handleSubmit}
-            isLoading={isLoading || isCheckingApiKey}
+            isLoading={isLoading}
             onFileChange={setSelectedFile}
             selectedFile={selectedFile}
             onImprovePrompt={handleImprovePrompt}
