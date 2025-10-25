@@ -6,17 +6,15 @@ interface ApiKeySelectorProps {
 
 const ApiKeySelector: React.FC<ApiKeySelectorProps> = ({ onKeySelected }) => {
   const handleSelectKey = async () => {
-    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-      try {
-        await window.aistudio.openSelectKey();
-        onKeySelected();
-      } catch (error) {
-        console.error("Erro ao abrir o seletor de chave de API:", error);
-        alert("Ocorreu um erro ao tentar selecionar a chave de API.");
-      }
-    } else {
-      console.error("A função window.aistudio.openSelectKey não está definida.");
-      alert("A função para selecionar a chave de API não está disponível. Por favor, recarregue a página e tente novamente.");
+    // A lógica no App.tsx agora garante que window.aistudio.openSelectKey exista antes que este componente seja renderizado.
+    // Incluímos um try-catch como uma salvaguarda contra problemas inesperados do ambiente.
+    try {
+      await window.aistudio.openSelectKey();
+      // Conforme as diretrizes, assumimos que a seleção da chave foi bem-sucedida e prosseguimos.
+      onKeySelected();
+    } catch (error) {
+      console.error("Erro ao abrir o seletor de chave de API:", error);
+      alert("Ocorreu um erro ao tentar selecionar a chave de API. Verifique o console para mais detalhes.");
     }
   };
 

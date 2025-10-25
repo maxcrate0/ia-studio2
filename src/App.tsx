@@ -27,19 +27,34 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // This effect runs once on mount to check for an existing API key.
-    const checkApiKey = async () => {
-      try {
-        if (window.aistudio) {
-          const hasKey = await window.aistudio.hasSelectedApiKey();
-          setApiKeyReady(hasKey);
+    // It polls for window.aistudio because it might be injected after the app loads.
+    const checkApiKey = () => {
+      let attempts = 0;
+      const maxAttempts = 15; // Poll for 3 seconds
+      const interval = 200;
+
+      const pollForAistudio = setInterval(async () => {
+        attempts++;
+        if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+          clearInterval(pollForAistudio);
+          try {
+            const hasKey = await window.aistudio.hasSelectedApiKey();
+            setApiKeyReady(hasKey);
+          } catch (e) {
+            console.error("Error calling hasSelectedApiKey:", e);
+            setApiKeyReady(false);
+          } finally {
+            setIsCheckingApiKey(false);
+          }
+        } else if (attempts >= maxAttempts) {
+          clearInterval(pollForAistudio);
+          console.warn("window.aistudio was not found after timeout.");
+          setApiKeyReady(false);
+          setIsCheckingApiKey(false);
         }
-      } catch (e) {
-        console.error("Error checking for API key:", e);
-        setApiKeyReady(false);
-      } finally {
-        setIsCheckingApiKey(false);
-      }
+      }, interval);
     };
+
     checkApiKey();
   }, []);
 
@@ -109,6 +124,7 @@ const App: React.FC = () => {
   const handleApiKeySelected = () => {
     setApiKeyReady(true);
     setNeedsApiKey(false);
+    // Automatically re-submit after key selection
     handleSubmit();
   };
   
@@ -140,6 +156,11 @@ const App: React.FC = () => {
 
   const handleSubmit = useCallback(async () => {
     if (!apiKeyReady) {
+      // Before showing the modal, verify the function to open it exists.
+      if (!window.aistudio || typeof window.aistudio.openSelectKey !== 'function') {
+        alert("A função para selecionar a chave de API não está disponível. Por favor, recarregue a página.");
+        return;
+      }
       setNeedsApiKey(true);
       return;
     }

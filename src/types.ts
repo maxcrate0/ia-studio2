@@ -29,10 +29,3 @@ export interface ChatSession {
   title: string;
   conversation: ResultItem[];
 }
-
-
-// This is a global declaration for the aistudio object for TypeScript
-
-// FIX: To resolve the redeclaration error for 'aistudio', the AIStudio interface and global declaration
-// have been removed from this file. The project now relies on the single source of truth
-// in the root `types.ts` file.
