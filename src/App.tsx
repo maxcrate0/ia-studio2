@@ -20,9 +20,28 @@ const App: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   const [needsApiKey, setNeedsApiKey] = useState<boolean>(false);
-  const [apiKeySelected, setApiKeySelected] = useState<boolean>(false);
-  
+  const [apiKeyReady, setApiKeyReady] = useState<boolean>(false);
+  const [isCheckingApiKey, setIsCheckingApiKey] = useState<boolean>(true);
+
   const resultsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // This effect runs once on mount to check for an existing API key.
+    const checkApiKey = async () => {
+      try {
+        if (window.aistudio) {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          setApiKeyReady(hasKey);
+        }
+      } catch (e) {
+        console.error("Error checking for API key:", e);
+        setApiKeyReady(false);
+      } finally {
+        setIsCheckingApiKey(false);
+      }
+    };
+    checkApiKey();
+  }, []);
 
   useEffect(() => {
     try {
@@ -88,7 +107,7 @@ const App: React.FC = () => {
   };
 
   const handleApiKeySelected = () => {
-    setApiKeySelected(true);
+    setApiKeyReady(true);
     setNeedsApiKey(false);
     handleSubmit();
   };
@@ -120,6 +139,11 @@ const App: React.FC = () => {
   };
 
   const handleSubmit = useCallback(async () => {
+    if (!apiKeyReady) {
+      setNeedsApiKey(true);
+      return;
+    }
+
     const trimmedPrompt = prompt.trim();
     if ((!trimmedPrompt && !selectedFile) || isLoading) return;
 
@@ -161,14 +185,6 @@ const App: React.FC = () => {
 
     try {
       const tasks = await dispatchPrompt(trimmedPrompt, selectedFile);
-      if (tasks.some(task => task.feature === Feature.VideoGeneration)) {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
-        if (!hasKey && !apiKeySelected) {
-          setNeedsApiKey(true);
-          setIsLoading(false);
-          return;
-        }
-      }
       
       let lastResult: any = null;
       for (const task of tasks) {
@@ -196,19 +212,22 @@ const App: React.FC = () => {
       }
     } catch (e: any) {
       console.error(e);
-      const errorMessage = `Ocorreu um erro: ${e.message || 'Tente novamente.'}`;
+      let errorMessage = `Ocorreu um erro: ${e.message || 'Tente novamente.'}`;
+      const isApiKeyError = e.message?.includes("Requested entity was not found.") || e.message?.includes("API Key must be set");
+
+      if (isApiKeyError) {
+        setApiKeyReady(false);
+        errorMessage = "Sua chave de API parece ser inválida ou não foi definida. Por favor, selecione uma chave válida e tente novamente.";
+      }
+      
       setError(errorMessage);
-       if (e.message?.includes("Requested entity was not found.")) {
-          setApiKeySelected(false);
-          setError("Sua chave de API parece ser inválida. Por favor, selecione uma chave válida e tente novamente.");
-        }
       updateCurrentConversation({ id: Date.now().toString(), type: 'error', data: errorMessage, feature: Feature.Chat });
     } finally {
       setIsLoading(false);
       setPrompt('');
       setSelectedFile(null);
     }
-  }, [prompt, selectedFile, isLoading, apiKeySelected, currentSessionId, sessions]);
+  }, [prompt, selectedFile, isLoading, apiKeyReady, currentSessionId, sessions]);
 
   const getLoadingMessageForTask = (task: Task): string => {
     switch (task.feature) {
@@ -245,6 +264,11 @@ const App: React.FC = () => {
                   <p className="text-gray-400 max-w-md">
                       Seu assistente de IA unificado. De imagens e vídeos a pesquisas e bate-papo, tudo em um só lugar. Como posso ajudar hoje?
                   </p>
+                  {!isCheckingApiKey && !apiKeyReady && (
+                    <div className="mt-4 bg-yellow-500/10 text-yellow-300 p-3 rounded-lg text-sm max-w-md">
+                      Nenhuma chave de API encontrada. Você será solicitado a selecionar uma ao enviar seu primeiro prompt.
+                    </div>
+                  )}
               </div>
           )}
           <div className="max-w-4xl mx-auto space-y-4">
@@ -264,7 +288,7 @@ const App: React.FC = () => {
             prompt={prompt}
             onPromptChange={setPrompt}
             onSubmit={handleSubmit}
-            isLoading={isLoading}
+            isLoading={isLoading || isCheckingApiKey}
             onFileChange={setSelectedFile}
             selectedFile={selectedFile}
             onImprovePrompt={handleImprovePrompt}

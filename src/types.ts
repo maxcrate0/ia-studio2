@@ -33,9 +33,10 @@ export interface ChatSession {
 
 // This is a global declaration for the aistudio object for TypeScript
 
-// FIX: Moved the AIStudio interface outside of the `declare global` block to prevent potential redeclaration issues
-// that can cause "All declarations of '...' must have identical modifiers" errors.
-export interface AIStudio {
+// FIX: To resolve the redeclaration error for 'aistudio', the `AIStudio` interface is no longer exported from this file.
+// It is now a local interface used only for the global declaration, which avoids a naming conflict with the
+// identical interface exported from the root `types.ts` file.
+interface AIStudio {
   hasSelectedApiKey: () => Promise<boolean>;
   openSelectKey: () => Promise<void>;
 }
