@@ -1,0 +1,5 @@
+{
+  "name": "AI Studio Universal",
+  "description": "A unified interface to access all Gemini AI capabilities. Simply type a prompt, and the app automatically detects and uses the right tools, from image and video generation to in-depth research and conversation.",
+  "requestFramePermissions": []
+}
